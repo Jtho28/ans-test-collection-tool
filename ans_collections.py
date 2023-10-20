@@ -2,7 +2,7 @@ import requests
 import sys
 from datetime import datetime
 from datetime import timedelta
-
+import yaml
 
 '''
 Prints the recommend collection version for a specified collection,
@@ -21,6 +21,16 @@ testing suite.
         None
 '''
 def main():
+
+    with open('./molecule/shared/collections.yml', 'r') as file:
+        data = yaml.safe_load(file)
+    
+    collections = []
+    for node in data['collections']:
+        collections.extend(node['name'].split('.'))
+        collections.append(node['name'])
+
+    print(collections)
 
     collection = f"https://api.github.com/repos/ansible-collections/{sys.argv[1]}/releases"
     ansible_ver = f"https://api.github.com/repos/ansible/ansible/releases"
