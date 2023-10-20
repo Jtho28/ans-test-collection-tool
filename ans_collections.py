@@ -34,8 +34,6 @@ def main():
 
     collections = [x for i, x in enumerate(collections) if x not in collections[:i]]
 
-    print(collections)
-
     for potential_coll_name in collections:
 
         collection_url = f"https://api.github.com/repos/ansible-collections/{potential_coll_name}/releases"
