@@ -3,6 +3,7 @@ import sys
 from datetime import datetime
 from datetime import timedelta
 import yaml
+import json
 
 '''
 Prints the recommend collection version for a specified collection,
@@ -30,39 +31,56 @@ def main():
         collections.extend(node['name'].split('.'))
         collections.append(node['name'])
 
+    collections = set(collections)
+
     print(collections)
 
-    collection = f"https://api.github.com/repos/ansible-collections/{sys.argv[1]}/releases"
-    ansible_ver = f"https://api.github.com/repos/ansible/ansible/releases"
+    for potential_coll_name in collections:
 
-    payload = {}
-    headers = {}
+        collection_url = f"https://api.github.com/repos/ansible-collections/{potential_coll_name}/releases"
+        ansible_ver_url = f"https://api.github.com/repos/ansible/ansible/releases"
 
-    coll_resp = requests.request("GET", collection, headers=headers, data=payload).json()
-    ans_resp = requests.request("GET", ansible_ver, headers=headers, data=payload).json()
+        payload = {}
+        headers = {}
 
-    pre = timedelta(days=-30)
-    post = timedelta(days=30)
+        coll_resp = requests.request("GET", collection_url, headers=headers, data=payload).json()
+        
+        try:
+            if (coll_resp['message'] == "Not Found"):
+                continue
+        except:
+            pass
 
-    recommended_versions = []
+        with open(f'{potential_coll_name}.json', 'w') as json_file:
+            json.dump(coll_resp, json_file)
 
-    for ans in ans_resp:
-        if (ans['name'] == f"v{sys.argv[2]}"):  
-            ans_publish_date = ans['published_at']
-            ans_publish_date = datetime.strptime(ans_publish_date, "%Y-%m-%dT%H:%M:%SZ")
-        else:
-            continue
+        ans_resp = requests.request("GET", ansible_ver_url, headers=headers, data=payload).json()
 
-        for coll in coll_resp:
-            coll_publish_date = datetime.strptime(coll['published_at'], "%Y-%m-%dT%H:%M:%SZ")
+        with open(f'ansible-releases', 'w') as json_file:
+            json.dump(ans_resp, json_file)
 
-            if (coll_publish_date - ans_publish_date >= post
-                or coll_publish_date - ans_publish_date >= pre
-                and ans['prerelease'] != 'true'):
-                #print(f"Collection: {coll['name']} Ansible: {ans['name']}")
-                recommended_versions.append(coll['name'][1:])
+        pre = timedelta(days=-30)
+        post = timedelta(days=30)
 
-    print(max(recommended_versions))
+        recommended_versions = []
+
+        for ans in ans_resp:
+            if (ans['name'] == f"v{sys.argv[2]}"):  
+                ans_publish_date = ans['published_at']
+                ans_publish_date = datetime.strptime(ans_publish_date, "%Y-%m-%dT%H:%M:%SZ")
+            else:
+                continue
+
+            for coll in coll_resp:
+                coll_publish_date = datetime.strptime(coll['published_at'], "%Y-%m-%dT%H:%M:%SZ")
+
+                if (coll_publish_date - ans_publish_date >= post
+                    or coll_publish_date - ans_publish_date >= pre
+                    and ans['prerelease'] != 'true'):
+                    #print(f"Collection: {coll['name']} Ansible: {ans['name']}")
+                    recommended_versions.append(coll['name'][1:])
+
+        if len(recommended_versions) != 0: print(f"{potential_coll_name}: {max(recommended_versions)}")
 
 
 if __name__ == "__main__":
