@@ -4,6 +4,7 @@ from datetime import datetime
 from datetime import timedelta
 import yaml
 import json
+import re
 
 '''
 Prints the recommend collection version for a specified collection,
@@ -31,7 +32,7 @@ def main():
         collections.extend(node['name'].split('.'))
         collections.append(node['name'])
 
-    collections = set(collections)
+    collections = [x for i, x in enumerate(collections) if x not in collections[:i]]
 
     print(collections)
 
@@ -56,7 +57,7 @@ def main():
 
         ans_resp = requests.request("GET", ansible_ver_url, headers=headers, data=payload).json()
 
-        with open(f'ansible-releases', 'w') as json_file:
+        with open(f'ansible-releases.json', 'w') as json_file:
             json.dump(ans_resp, json_file)
 
         pre = timedelta(days=-30)
@@ -65,7 +66,7 @@ def main():
         recommended_versions = []
 
         for ans in ans_resp:
-            if (ans['name'] == f"v{sys.argv[2]}"):  
+            if (ans['name'] == f"v{sys.argv[1]}"):  
                 ans_publish_date = ans['published_at']
                 ans_publish_date = datetime.strptime(ans_publish_date, "%Y-%m-%dT%H:%M:%SZ")
             else:
@@ -78,9 +79,11 @@ def main():
                     or coll_publish_date - ans_publish_date >= pre
                     and ans['prerelease'] != 'true'):
                     #print(f"Collection: {coll['name']} Ansible: {ans['name']}")
-                    recommended_versions.append(coll['name'][1:])
+                    match = re.search("\d+\.\d+\.\d+", coll['name'])
+                    ver_span = match.span()
+                    recommended_versions.append(coll['name'][ver_span[0]:ver_span[1]])
 
-        if len(recommended_versions) != 0: print(f"{potential_coll_name}: {max(recommended_versions)}")
+        if len(recommended_versions) != 0: print(f"{max(recommended_versions)}")
 
 
 if __name__ == "__main__":
