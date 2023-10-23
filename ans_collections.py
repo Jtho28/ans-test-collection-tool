@@ -28,11 +28,14 @@ cached json files for data if they exist.
 '''
 def main():
 
+    hit_api = False
+
     try:
         with open('./time_cache.pkl', 'rb') as file:
             last_ran = pickle.load(file)
     except:
         last_ran = datetime.utcnow()
+        hit_api = True
 
 
     with open('./molecule/shared/collections.yml', 'r') as file:
@@ -50,7 +53,7 @@ def main():
 
         # If thirty days have passed since last run, or the script has
         # never been run, hit the api
-        if ((datetime.utcnow() - last_ran).days >= 30):
+        if ((datetime.utcnow() - last_ran).days >= 30 or hit_api):
             collection_url = f"https://api.github.com/repos/ansible-collections/{potential_coll_name}/releases"
             ansible_ver_url = f"https://api.github.com/repos/ansible/ansible/releases"
 
