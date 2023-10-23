@@ -9,10 +9,10 @@ import re
 import pickle
 
 '''
-Prints the recommend collection version for a specified collection,
-given a particular version of ansible. This was designed as a very small
-tool to determine which collection version should be tested for an ansible
-testing suite.
+Determines recommended versions of collections based on 
+role dependencies and ansible-core version. Then, it installs
+the collections to the role as specified in the molecule/
+structure.
 
 If the script has been ran in the past 30 days, the script will use
 cached json files for data if they exist.
@@ -20,9 +20,8 @@ cached json files for data if they exist.
     Parameters:
         None
     
-    Cmdline Args:
-        1: Name of collection as specified by github repository name.
-        2: Version of ansible core the user (more likely script) needs a recommendation for.
+    Cmdline Args:.
+        1: Version of ansible core the user (more likely script) needs a recommendation for.
 
     Returns:
         None
