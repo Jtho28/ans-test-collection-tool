@@ -1,5 +1,0 @@
-cloud/azure
-shippable/azure/group12
-destructive
-azure_rm_manageddisk_info
-azure_rm_multiplemanageddisks
