@@ -1,0 +1,356 @@
+- name: Set Container Instance Names
+  set_fact:
+    rpfx: "{{ resource_group | hash('md5') | truncate(7, True, '') }}{{ 1000 | random }}"
+
+- name: Create sample container instance
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+  register: output
+
+- debug:
+    var: output
+
+- name: Assert the container instance is well created
+  assert:
+    that:
+      - output.changed
+      - output.provisioning_state == 'Succeeded'
+
+- name: Create sample container instance -- same parameters
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+  register: output
+
+- name: Assert the container instance is well created
+  assert:
+    that:
+      - output.changed == False
+
+- name: Create sample container instance -- force update
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+    force_update: yes
+  register: output
+
+- name: Assert the container instance is well created
+  assert:
+    that:
+      - output.changed
+      - output.provisioning_state == 'Succeeded'
+
+- name: Create second container instance for testing purposes
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}sec"
+    os_type: linux
+    ip_address: public
+    dns_name_label: mydnslabel{{ resource_group | hash('md5') | truncate(7, True, '') }}
+    location: eastus
+    restart_policy: on_failure
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+        environment_variables:
+          - name: myvar
+            value: myvarvalue
+  register: output
+
+- name: Create virtual network
+  azure_rm_virtualnetwork:
+    resource_group: "{{ resource_group }}"
+    name: "vnet{{ rpfx }}"
+    address_prefixes_cidr:
+      - 10.1.0.0/16
+      - 172.100.0.0/16
+
+- name: Create a subnet
+  azure_rm_subnet:
+    resource_group: "{{ resource_group }}"
+    name: "sub{{ rpfx }}"
+    virtual_network_name: "vnet{{ rpfx }}"
+    address_prefix_cidr: "10.1.0.0/24"
+    private_link_service_network_policies: Disabled
+    private_endpoint_network_policies: Disabled
+    delegations:
+      - name: delegation_to_containerinsance
+        serviceName: 'Microsoft.ContainerInstance/containerGroups'
+  register: subnet_output
+
+- name: Create third container instance for subnet_ids
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}thi"
+    os_type: linux
+    ip_address: private
+    location: eastus
+    subnet_ids:
+      - "{{ subnet_output.state.id }}"
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+  register: output
+
+- name: Assert the container instance is well created
+  assert:
+    that:
+      - output.changed
+
+- name: Gather facts for single Container Instance
+  azure_rm_containerinstance_info:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}sec"
+  register: output 
+
+- debug:
+    var: output
+
+- name: Assert that facts are returned
+  assert:
+    that:
+      - output.changed == False
+      - output.containerinstances[0]['resource_group'] != None
+      - output.containerinstances[0]['name'] != None
+      - output.containerinstances[0]['os_type'] != None
+      - output.containerinstances[0]['location'] != None
+      - output.containerinstances[0]['ip_address'] != None
+      - output.containerinstances[0]['ports'] != None
+      - output.containerinstances[0]['containers'] != None
+      - output.containerinstances[0]['containers'][0]['environment_variables'] | length == 1
+      - output.containerinstances[0]['restart_policy'] == 'on_failure'
+
+- name: Gather facts for all Container Instances in the resource group
+  azure_rm_containerinstance_info:
+    resource_group: "{{ resource_group }}"
+  register: output
+
+- name: Assert that facts are returned
+  assert:
+    that:
+      - output.changed == False
+      - output.containerinstances[0]['resource_group'] != None
+      - output.containerinstances[0]['name'] != None
+      - output.containerinstances[0]['os_type'] != None
+      - output.containerinstances[0]['location'] != None
+      - output.containerinstances[0]['ip_address'] != None
+      - output.containerinstances[0]['ports'] != None
+      - output.containerinstances[0]['containers'] != None
+      - output.containerinstances[1]['resource_group'] != None
+      - output.containerinstances[1]['name'] != None
+      - output.containerinstances[1]['os_type'] != None
+      - output.containerinstances[1]['location'] != None
+      - output.containerinstances[1]['ip_address'] != None
+      - output.containerinstances[1]['ports'] != None
+      - output.containerinstances[1]['containers'] != None
+
+- name: Create sample container instance with volume
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}thi"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: mcr.microsoft.com/azuredocs/aci-helloworld
+        memory: 1.5
+        volume_mounts:
+          - name: "my-filesharevolume"
+            mount_path: "/data/files"
+        ports:
+          - 80
+          - 81
+    volumes:
+      - name: "my-filesharevolume"
+        azure_file:
+          storage_account_name: "{{ storage_account_name }}"
+          share_name: "{{ file_share_name }}"
+          storage_account_key: "{{ storage_account_key }}"
+  register: output
+  ignore_errors: True
+
+- debug:
+    var: output
+  ignore_errors: True
+
+- name: Assert the container instance is well created
+  assert:
+    that:
+      - output.changed
+      - output.provisioning_state == 'Succeeded'
+  ignore_errors: True
+
+- name: Gather facts for Container Instance
+  azure_rm_containerinstance_info:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}thi"
+  register: output
+  ignore_errors: True
+
+- debug:
+    var: output
+  ignore_errors: True
+
+- name: Assert that facts are returned
+  assert:
+    that:
+      - output.changed == False
+      - output.containerinstances[0]['resource_group'] != None
+      - output.containerinstances[0]['name'] != None
+      - output.containerinstances[0]['os_type'] != None
+      - output.containerinstances[0]['location'] != None
+      - output.containerinstances[0]['ip_address'] != None
+      - output.containerinstances[0]['volumes'] != None
+      - output.containerinstances[0]['ports'] != None
+      - output.containerinstances[0]['containers'] != None
+      - output.containerinstances[0]['containers'][0]['volume_mounts'] | length == 1
+      - output.containerinstances[0]['containers'][0]['volume_mounts'][0]['name'] != None
+      - output.containerinstances[0]['containers'][0]['volume_mounts'][0]['mount_path'] != None
+  ignore_errors: True
+
+- name: Remove container instance
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}thi"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: mcr.microsoft.com/azuredocs/aci-helloworld
+        memory: 1.5
+        volume_mounts:
+          - name: "my-filesharevolume"
+            mount_path: "/data/files"
+        ports:
+          - 80
+          - 81
+    volumes:
+      - name: "my-filesharevolume"
+        azure_file:
+          storage_account_name: "{{ storage_account_name }}"
+          share_name: "{{ file_share_name }}"
+          storage_account_key: "{{ storage_account_key }}"
+    state: absent
+  register: output
+  ignore_errors: True
+
+- name: Remove container instance
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+    state: absent
+  register: output
+
+- name: Assert the container instance is deleted
+  assert:
+    that:
+      - output.changed
+
+- name: Remove container instance
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}sec"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+    state: absent
+
+- name: Remove container instance again
+  azure_rm_containerinstance:
+    resource_group: "{{ resource_group }}"
+    name: "aci{{ rpfx }}"
+    os_type: linux
+    ip_address: public
+    location: eastus
+    ports:
+      - 80
+    containers:
+      - name: mycontainer1
+        image: httpd
+        memory: 1.5
+        ports:
+          - 80
+          - 81
+    state: absent
+  register: output
+
+- name: Assert the changed is false
+  assert:
+    that:
+      - output.changed == False
